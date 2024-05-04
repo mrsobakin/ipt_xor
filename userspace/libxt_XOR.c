@@ -114,6 +114,20 @@ static struct xtables_target xor_reg[] = {
         .save          = xor_save,
         .extra_opts    = xor_opts,
     },
+    {
+        .version       = XTABLES_VERSION,
+        .name          = "XOR",
+        .revision      = 0,
+        .family        = NFPROTO_IPV6,
+        .size          = XT_ALIGN(sizeof(struct xt_xor_info)),
+        .userspacesize = XT_ALIGN(sizeof(struct xt_xor_info)),
+        .help          = xor_help,
+        .parse         = xor_parse,
+        .final_check   = xor_check,
+        .print         = xor_print,
+        .save          = xor_save,
+        .extra_opts    = xor_opts,
+    },
 };
 
 static void _init(void)
