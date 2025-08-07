@@ -20,6 +20,10 @@ MODULE_ALIAS("ipt_XOR");
 
 static inline void transform(char *buffer, uint32_t len, const struct xt_xor_info *info)
 {
+    if (info->first && len > info->first) {
+        len = info->first;
+    }
+
     const unsigned char* key = info->key;
     uint32_t key_len = info->key_len;
 

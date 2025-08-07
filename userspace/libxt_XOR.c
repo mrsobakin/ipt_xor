@@ -9,6 +9,7 @@
  */
 #include <netinet/in.h>
 #include <getopt.h>
+#include <inttypes.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <xtables.h>
@@ -24,10 +25,12 @@ enum {
 
 enum {
     O_XOR_KEY = 0,
+    O_XOR_FIRST = 1,
 };
 
 static const struct option xor_opts[] = {
-    {.name = "key", .has_arg = true, .val = O_XOR_KEY},
+    {.name = "key",   .has_arg = true, .val = O_XOR_KEY},
+    {.name = "first", .has_arg = true, .val = O_XOR_FIRST},
     {},
 };
 
@@ -35,7 +38,8 @@ static void xor_help(void)
 {
     printf(
             "XOR target options:\n"
-            "    --key <byte string>\n"
+            "    --first <number of bytes to be encoded>\n"
+            "    --key   <byte string>\n"
           );
 }
 
@@ -45,24 +49,32 @@ static int xor_parse(int c, char **argv, int invert, unsigned int *flags,
     struct xt_xor_info *info = (void *)(*target)->data;
     const char *s = optarg;
 
-    unsigned char *dst = info->key;
-    unsigned char *end = info->key + sizeof(info->key);
-    unsigned int b;
+    if (c == O_XOR_KEY) {
+        unsigned char *dst = info->key;
+        unsigned char *end = info->key + sizeof(info->key);
+        unsigned int b;
 
-    while (dst < end && sscanf(s, "%2x", &b) == 1) {
-        *dst++ = b;
-        info->key_len++;
-        s += 2;
+        while (dst < end && sscanf(s, "%2x", &b) == 1) {
+            *dst++ = b;
+            info->key_len++;
+            s += 2;
+        }
+
+        if (info->key_len == 0 || *s != '\0') {
+            xtables_error(PARAMETER_PROBLEM, "XOR: "
+                    "--key should be a hex string, with > 0 and <= " STRINGIFY(XT_XOR_MAX_KEY_SIZE) " bytes");
+            return false;
+        }
+
+        *flags |= FLAGS_KEY;
+        return true;
+    } else {
+        if (sscanf(s, "%" SCNu32, &info->first) != 1) {
+            xtables_error(PARAMETER_PROBLEM, "XOR: --first should be a uint32 number.");
+            return false;
+        }
+        return true;
     }
-
-    if (info->key_len == 0 || *s != '\0') {
-        xtables_error(PARAMETER_PROBLEM, "XOR: "
-                "keys length, > 0 and <= " STRINGIFY(XT_XOR_MAX_KEY_SIZE));
-        return false;
-    }
-
-    *flags |= FLAGS_KEY;
-    return true;
 }
 
 static void xor_check(unsigned int flags)
@@ -80,6 +92,10 @@ static void xor_print(const void *entry, const struct xt_entry_target *target, i
     const unsigned char* i = info->key;
     const unsigned char* end = info->key + info->key_len;
 
+    if (info->first) {
+        printf(" --first %" PRIu32, info->first);
+    }
+
     printf(" --key ");
     for (; i < end; ++i) {
         printf("%02x", *i);
@@ -88,15 +104,7 @@ static void xor_print(const void *entry, const struct xt_entry_target *target, i
 
 static void xor_save(const void *entry, const struct xt_entry_target *target)
 {
-    const struct xt_xor_info *info = (const void *)target->data;
-
-    const unsigned char* i = info->key;
-    const unsigned char* end = info->key + info->key_len;
-
-    printf(" --key ");
-    for (; i < end; ++i) {
-        printf("%02x", *i);
-    }
+    xor_print(entry, target, 0);
 }
 
 static struct xtables_target xor_reg[] = {
